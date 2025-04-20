@@ -1,42 +1,38 @@
 cmake_minimum_required(VERSION 3.10)
 project(MyProject)
 
+add_subdirectory("vendor/glfw")
+add_subdirectory("vendor/glew")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
-add_executable(Gizmos
-    ${SOURCES}
-)
+add_executable(Gizmos ${SOURCES} )
 
 add_custom_command(
     TARGET Gizmos POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "shaders"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/shaders "shaders"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/src/shaders" "shaders"
     COMMENT "Copying shader files to executable directory"
 )
 add_compile_definitions(SHADER_PATH="${CMAKE_SOURCE_DIR}/shaders")
 
-
-
 set(ONLY_LIBS ON CACHE BOOL "Build only GLEW libraries, not executables")
 
-add_subdirectory(vendor/glfw)
-add_subdirectory(vendor/glew)
-
 set(IMGUI_SRC
-    vendor/imgui/imgui.cpp
-    vendor/imgui/imgui_demo.cpp
-    vendor/imgui/imgui_draw.cpp
-    vendor/imgui/imgui_tables.cpp
-    vendor/imgui/imgui_widgets.cpp
-    vendor/imgui/backends/imgui_impl_glfw.cpp
-    vendor/imgui/backends/imgui_impl_opengl3.cpp
+    "vendor/imgui/imgui.cpp"
+    "vendor/imgui/imgui_demo.cpp"
+    "vendor/imgui/imgui_draw.cpp"
+    "vendor/imgui/imgui_tables.cpp"
+    "vendor/imgui/imgui_widgets.cpp"
+    "vendor/imgui/backends/imgui_impl_glfw.cpp"
+    "vendor/imgui/backends/imgui_impl_opengl3.cpp"
 )
 
 add_library(imgui STATIC ${IMGUI_SRC})
-target_include_directories(imgui PUBLIC vendor/imgui vendor/imgui/backends)
+target_include_directories(imgui PUBLIC "vendor/imgui" "vendor/imgui/backends")
 target_link_libraries(imgui PUBLIC glfw)
 
 set_target_properties(imgui PROPERTIES
@@ -45,12 +41,12 @@ set_target_properties(imgui PROPERTIES
 
 target_include_directories(Gizmos
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glfw/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glew/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui
-    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/glfw/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/glew/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends"
 )
 
 if(WIN32)
