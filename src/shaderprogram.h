@@ -2,7 +2,7 @@
 #define SHADERPROGRAM_H
 
 #include "GL/glew.h"
-#include "stdio.h"
+
 
 class ShaderProgram {
 private:
@@ -15,9 +15,17 @@ private:
 
 	char* readFile(const char* fileName);						// File reading method
 	GLuint loadShader(GLenum shaderType, const char* fileName); // Method reads shader source file, compiles it and returns the corresponding handle
+	void clean();
 
 public:
 	ShaderProgram(const char* vertexShaderFile, const char* fragmentShaderFile);
+	ShaderProgram() = default; 
+
+	ShaderProgram(const ShaderProgram&) = delete;
+	ShaderProgram& operator=(const ShaderProgram&) = delete;
+
+	ShaderProgram(ShaderProgram&& other) noexcept;
+	ShaderProgram& operator=(ShaderProgram&& other) noexcept;
 
 	int addShader(GLuint shaderType, const char* ShaderFile); 
 	int linkProgram(); 

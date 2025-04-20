@@ -42,7 +42,7 @@ GLuint ShaderProgram::loadShader(GLenum shaderType, const char* fileName) {
 
 	glCompileShader(shader);	//Compile source code
 
-	std::cout << shaderSource<<"\n";
+	std::cout << fileName <<"\n";
 
 	delete[]shaderSource;	//Delete source code from memory (it is no longer needed)
 
@@ -132,25 +132,51 @@ ShaderProgram::ShaderProgram(const char* vertexShaderFile, const char* fragmentS
 	linkProgram(); 
 }
 
-ShaderProgram::~ShaderProgram() {
+ShaderProgram::ShaderProgram(ShaderProgram&& other) noexcept {
+	*this = std::move(other);
+}
+
+ShaderProgram& ShaderProgram::operator=(ShaderProgram&& other) noexcept {
+	if (this != &other) {
+		clean();
+
+		shaderProgram = other.shaderProgram;
+		vertexShader = other.vertexShader;
+		geometryShader = other.geometryShader;
+		fragmentShader = other.fragmentShader;
+		tessEvalShader = other.tessEvalShader;
+		tessControlShader = other.tessControlShader;
+
+		other.shaderProgram = 0;
+		other.vertexShader = 0;
+		other.geometryShader = 0;
+		other.fragmentShader = 0;
+		other.tessEvalShader = 0;
+		other.tessControlShader = 0;
+	}
+	return *this;
+}
+
+void ShaderProgram::clean() {
 	//Detach shaders from program
-	glDetachShader(shaderProgram, vertexShader);
+	if (vertexShader != 0) glDetachShader(shaderProgram, vertexShader);
 	if (geometryShader != 0) glDetachShader(shaderProgram, geometryShader);
 	if (tessControlShader != 0) glDetachShader(shaderProgram, tessControlShader);
 	if (tessEvalShader != 0) glDetachShader(shaderProgram, tessEvalShader);
-	glDetachShader(shaderProgram, fragmentShader);
+	if (fragmentShader != 0) glDetachShader(shaderProgram, fragmentShader);
 
 	//Delete shaders
-	glDeleteShader(vertexShader);
+	if (vertexShader != 0) glDeleteShader(vertexShader);
 	if (geometryShader != 0) glDeleteShader(geometryShader);
 	if (tessControlShader != 0) glDeleteShader(tessControlShader);
 	if (tessEvalShader != 0) glDeleteShader(tessEvalShader);
-	glDeleteShader(fragmentShader);
+	if (fragmentShader != 0) glDeleteShader(fragmentShader);
 
 	//Delete program
-	glDeleteProgram(shaderProgram);
+	if (shaderProgram != 0) glDeleteProgram(shaderProgram);
 }
 
+ShaderProgram::~ShaderProgram() { clean(); }
 
 //Make the shader program active
 void ShaderProgram::use() {
