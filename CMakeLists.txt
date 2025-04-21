@@ -4,8 +4,17 @@ project(MyProject)
 add_subdirectory("vendor/glfw")
 add_subdirectory("vendor/glew")
 
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
+set(ASSIMP_BUILD_TESTS OFF)
+set(ASSIMP_BUILD_SAMPLES OFF)
+set(ASSIMP_NO_EXPORT ON)
+set(ASSIMP_BUILD_DRACO_DECODER OFF)
+set(ASSIMP_BUILD_ZLIB ON)
+set(BUILD_SHARED_LIBS OFF)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_subdirectory("vendor/assimp")
 
 file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.cpp")
 
@@ -47,6 +56,8 @@ target_include_directories(Gizmos
     "${CMAKE_CURRENT_SOURCE_DIR}/vendor/glm"
     "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui"
     "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/assimp/include"
+
 )
 
 if(WIN32)
@@ -57,4 +68,5 @@ target_link_libraries(Gizmos PUBLIC
     glfw
     libglew_static
     imgui
+    assimp
 )
