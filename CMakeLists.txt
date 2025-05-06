@@ -25,6 +25,16 @@ set(BUILD_SHARED_LIBS OFF)
 
 add_subdirectory("vendor/assimp")
 
+# stb_image
+
+set(STB_IMAGE_SRC "vendor/stb_image/stb_image.cpp")
+
+add_library(stb_image STATIC ${STB_IMAGE_SRC})
+set_target_properties(stb_image PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/vendor/stb_image"
+)
+
+
 # ImGui
 set(IMGUI_SRC
     "vendor/imgui/imgui.cpp"
@@ -62,6 +72,15 @@ add_custom_command(
     COMMENT "Copying shader files to executable directory"
 )
 
+add_custom_command(
+    TARGET Gizmos POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:Gizmos>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+            "${CMAKE_SOURCE_DIR}/src/assets" 
+            "$<TARGET_FILE_DIR:Gizmos>/assets"
+    COMMENT "Copying assets files to executable directory"
+)
+
 # === Include Paths ===
 target_include_directories(Gizmos PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -71,6 +90,8 @@ target_include_directories(Gizmos PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui"
     "${CMAKE_CURRENT_SOURCE_DIR}/vendor/imgui/backends"
     "${CMAKE_CURRENT_SOURCE_DIR}/vendor/assimp/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/vendor/stb_image"
+
 )
 
 # === Linking ===
@@ -79,6 +100,7 @@ target_link_libraries(Gizmos PUBLIC
     libglew_static
     imgui
     assimp
+    stb_image
 )
 
 find_package(OpenGL REQUIRED)
