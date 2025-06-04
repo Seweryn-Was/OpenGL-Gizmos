@@ -1,4 +1,9 @@
 #include "Gizmo.h"  
+#include <iostream>
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #include "openglUtil.h"
 #include "shaderprogram.h"
@@ -7,7 +12,7 @@
 #define PI 3.14159f
 
 double mouseX = 0.0, mouseY = 0.0;
-float radius = 0.65f;
+float radius = 0.2f;
 uint32_t numSegments = 100;
 
 ShaderProgram gDefaultShader;
@@ -16,6 +21,7 @@ ShaderProgram gDefaultShader;
 std::vector<GLfloat> vertices[3];
 std::vector<GLuint> indices[3];
 GLuint VAO[3], VBO[3], EBO[3];
+GLuint circVAO, circVBO, circEBO;
 
 struct Context {
 
@@ -24,6 +30,7 @@ struct Context {
 	glm::mat4 viewMat;
 	glm::mat4 projectionMat;
 	glm::mat4 model;
+	glm::vec3 modelScaleOrigin;
 	glm::mat4 mModelSource;
 
 	glm::vec4 cameraEye;
@@ -50,6 +57,7 @@ struct Context {
 struct Context gContext;
 
 namespace gizmo {
+
 
 	void init() {
 		gDefaultShader = ShaderProgram("shaders/v_default.glsl", "shaders/f_default.glsl");
@@ -92,6 +100,28 @@ namespace gizmo {
 			//glBindBuffer(GL_ARRAY_BUFFER, 0);
 			glBindVertexArray(0);
 		}
+
+		std::vector<glm::vec3> circleVert(numSegments);
+
+		for (int i = 0; i < numSegments; ++i) {
+			float theta = 2 * PI * float(i) / float(numSegments);
+			glm::vec3 point = glm::vec3(cos(theta), sin(theta), 0.0f) * (radius + 0.03f);
+			circleVert[i] = point; 
+		}
+
+		glGenVertexArrays(1, &circVAO);
+		glGenBuffers(1, &circVBO);
+		glGenBuffers(1, &circEBO);
+
+		glBindVertexArray(circVAO);
+
+		glBindBuffer(GL_ARRAY_BUFFER, circVBO);
+		glBufferData(GL_ARRAY_BUFFER, circleVert.size() * sizeof(glm::vec3), circleVert.data(), GL_STATIC_DRAW);
+
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (GLvoid*)0);
+		glEnableVertexAttribArray(0);
+
+		glBindVertexArray(0);
 	}
 
 	void DecomposeTransform(const glm::mat4& modelMatrix, glm::vec3& translation, glm::vec3& rotation, glm::vec3& scale) {
@@ -118,7 +148,7 @@ namespace gizmo {
 
 	// apply to vector <in> only scale and roattion from matrix <matrix>
 	glm::vec4 TransformVector(const glm::mat4& matrix, glm::vec4 in) {
-		glm::vec4 out;
+		glm::vec4 out(0.0f);
 		float x = in.x, y = in.y, z = in.z, w = in.w;
 
 		out.x = x * matrix[0][0] + y * matrix[1][0] + z * matrix[2][0];
@@ -140,7 +170,7 @@ namespace gizmo {
 		glm::vec3 ndcSpacePos = glm::vec3(clipSpacePos) / clipSpacePos.w;
 
 		// Convert from NDC [-1,1] to screen space [0, windowSize]
-		glm::vec2 screenPos;
+		glm::vec2 screenPos(0.0);
 		screenPos.x = (ndcSpacePos.x + 1.0f) * 0.5f * windowSize.x;
 		screenPos.y = (1.0f - ndcSpacePos.y) * 0.5f * windowSize.y; // Y is flipped for screen space
 
@@ -172,12 +202,42 @@ namespace gizmo {
 		rayDir = glm::normalize(rayEnd - rayOrigin);
 	}
 
+	glm::mat4 RemoveScale(const glm::mat4& matrix) {
+		glm::vec3 translation = glm::vec3(matrix[3]);
+
+		// Extract and normalize the rotation axes (columns 0, 1, 2)
+		glm::vec3 xAxis = glm::normalize(glm::vec3(matrix[0]));
+		glm::vec3 yAxis = glm::normalize(glm::vec3(matrix[1]));
+		glm::vec3 zAxis = glm::normalize(glm::vec3(matrix[2]));
+
+		// Create a new matrix without scale
+		glm::mat4 result(1.0f);
+		result[0] = glm::vec4(xAxis, 0.0f);
+		result[1] = glm::vec4(yAxis, 0.0f);
+		result[2] = glm::vec4(zAxis, 0.0f);
+		result[3] = glm::vec4(translation, 1.0f);
+
+		return result;
+	}
+
+	glm::vec3 GetScaleFromMatrix(const glm::mat4& matrix) {
+		glm::vec3 scale(1.0);
+		scale.x = glm::length(glm::vec3(matrix[0])); // column 0 = X axis
+		scale.y = glm::length(glm::vec3(matrix[1])); // column 1 = Y axis
+		scale.z = glm::length(glm::vec3(matrix[2])); // column 2 = Z axis
+		return scale;
+	}
+
+	glm::mat4 drawModel = glm::mat4(1.0f); 
 
 	void setUpContext(const glm::mat4& view, const glm::mat4& projection, const glm::mat4& model) {
+		drawModel = model;
 		gContext.viewMat = view;
 		gContext.projectionMat = projection;
-		gContext.model = model;
-		gContext.mvp = projection * view * model;
+		gContext.modelScaleOrigin = GetScaleFromMatrix(model);
+		gContext.model =  RemoveScale(model);
+ 
+		gContext.mvp = projection * view * gContext.model;
 
 		glm::mat4 invView = glm::inverse(view);
 
@@ -212,8 +272,7 @@ namespace gizmo {
 		return -(numer / denom);
 	}
 
-	void manipulate(glm::mat4* view, glm::mat4* projection, glm::mat4* matrix) {
-
+	void manipulate(glm::mat4* view, glm::mat4* projection, glm::mat4* matrix, glm::mat4* delta) {
 		setUpContext(*view, *projection, *matrix);
 
 		glm::vec2 deltaScreen = { Input::GetMouseX() - gContext.gizmoCenter.x, Input::GetMouseY() - gContext.gizmoCenter.y };
@@ -243,7 +302,7 @@ namespace gizmo {
 
 			// Compute local position
 			glm::vec4 localPos = intersectWorldPos - gContext.model[3];
-			glm::vec4 idealPosOnCircle = glm::normalize(localPos);  // gContext.rotationDisplayFactor;
+			glm::vec4 idealPosOnCircle = glm::normalize(localPos) * radius;  // gContext.rotationDisplayFactor;
 			idealPosOnCircle = TransformVector(glm::inverse(gContext.model), idealPosOnCircle);
 			// Convert to screen space
 			glm::vec4 trans;
@@ -314,11 +373,14 @@ namespace gizmo {
 			rotationAxisLocalSpace = glm::normalize(rotationAxisLocalSpace);
 
 			float deltaAngle = gContext.rotationAngle - gContext.rotationAngleOrigin;
-
+			std::cout << deltaAngle << "\n"; 
 			glm::mat4 deltamat = glm::rotate(gContext.model, deltaAngle, glm::vec3(rotationAxisLocalSpace));
 
-			deltamat[3] = gContext.mModelSource[3];
-			gContext.model = deltamat;
+			glm::mat4 result = deltamat; 
+			result[3] = gContext.mModelSource[3];
+			result = glm::scale(result, gContext.modelScaleOrigin);
+
+			//gContext.model = deltamat;
 
 			gContext.rotationAngleOrigin = gContext.rotationAngle;
 
@@ -326,9 +388,12 @@ namespace gizmo {
 				gContext.usingGizmo = false;
 				gContext.type = 0;
 			}
+
+			*matrix = result; //gContext.model;
+			*delta = glm::rotate(gContext.model, deltaAngle, glm::vec3(rotationAxisLocalSpace));//deltamat; 
 		}
 
-		*matrix = gContext.model;
+
 	}
 
 	void drawRotationGizmo() {
@@ -345,7 +410,7 @@ namespace gizmo {
 
 				glm::vec4 pos = glm::vec4(x, y, 0.0f, 1.0f);
 
-				glm::vec4 axisPos = glm::vec4(pos[axis], pos[(axis + 1) % 3], pos[(axis + 2) % 3], 1.0f) * 1.5f;
+				glm::vec4 axisPos = glm::vec4(pos[axis], pos[(axis + 1) % 3], pos[(axis + 2) % 3], 1.0f) ; //* 1.5f
 
 				vertices[axis].push_back(axisPos.x);
 				vertices[axis].push_back(axisPos.y);
@@ -369,9 +434,34 @@ namespace gizmo {
 
 			glUniform3f(gDefaultShader.u("color"), axisColor.r, axisColor.g, axisColor.b);
 			glUniformMatrix4fv(gDefaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(glm::mat4(gContext.model)));
-			glLineWidth(5.0f);
+			glLineWidth(3.0f);
 			glDrawElements(GL_LINES, static_cast<GLsizei>(indices[axis].size()), GL_UNSIGNED_INT, 0);
 			glEnable(GL_DEPTH_TEST);
 		}
+		
+		glDisable(GL_DEPTH_TEST);
+		gDefaultShader.use();
+
+		glBindVertexArray(circVAO);
+
+		glUniformMatrix4fv(gDefaultShader.u("V"), 1, GL_FALSE, glm::value_ptr(gContext.viewMat));
+		glUniformMatrix4fv(gDefaultShader.u("P"), 1, GL_FALSE, glm::value_ptr(gContext.projectionMat));
+
+		const glm::mat4 viewModel = gContext.viewMat * gContext.model;
+		const glm::vec3 viewDir = glm::vec3(viewModel[3]);
+
+		const glm::vec3 defaultNormal = glm::vec3(0, 0, 1);
+		const glm::quat rot = glm::rotation(defaultNormal, viewDir);
+		const glm::mat4 rotationMatrix = glm::toMat4(rot);
+
+		const glm::vec4 objPos = gContext.model[3];
+
+		glUniform3f(gDefaultShader.u("color"), 0.5, 0.5, 0.5);
+		glUniformMatrix4fv(gDefaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(glm::translate(glm::mat4(1.0f), glm::vec3(objPos)) * rotationMatrix));
+		glLineWidth(3.0f);
+		glDrawArrays(GL_LINE_LOOP, 0, numSegments);
+
+		glEnable(GL_DEPTH_TEST);
+		
 	}
 }

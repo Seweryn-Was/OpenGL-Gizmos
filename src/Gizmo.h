@@ -22,7 +22,7 @@ namespace gizmo {
 
 	void init();
 
-	void manipulate(glm::mat4* view, glm::mat4* projection, glm::mat4* matrix);
+	void manipulate(glm::mat4* view, glm::mat4* projection, glm::mat4* matrix, glm::mat4* delta); 
 
 	void drawRotationGizmo();
 }
