@@ -33,13 +33,31 @@ namespace Gizmo {
 		glBufferSubData(GL_ARRAY_BUFFER, offset, size, data);
 	};
 
+	IndexBuffer::IndexBuffer(uint32_t* indices, uint32_t count) : m_count(count), mIndexForamt(IndexType::UInt32) {
 
-	IndexBuffer::IndexBuffer(uint32_t* indices, uint32_t count) : m_count(count) {
 		glCreateBuffers(1, &m_indexBufferID);
 		glBindBuffer(GL_ARRAY_BUFFER, m_indexBufferID);
-		glBufferData(GL_ARRAY_BUFFER, m_count, indices, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, m_count * sizeof(uint32_t), indices, GL_DYNAMIC_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	};
+
+	IndexBuffer::IndexBuffer(uint16_t* indices, uint32_t count) : m_count(count), mIndexForamt(IndexType::UInt16) {
+		glCreateBuffers(1, &m_indexBufferID);
+		glBindBuffer(GL_ARRAY_BUFFER, m_indexBufferID);
+		glBufferData(GL_ARRAY_BUFFER, m_count * sizeof(uint16_t), indices, GL_DYNAMIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	};
+
+	IndexBuffer::IndexBuffer(uint8_t* indices, uint32_t count, IndexType indexFormat) : m_count(count), mIndexForamt(indexFormat) {
+		glCreateBuffers(1, &m_indexBufferID);
+		glBindBuffer(GL_ARRAY_BUFFER, m_indexBufferID);
+		if(indexFormat == IndexType::UInt16){
+			glBufferData(GL_ARRAY_BUFFER, m_count * sizeof(uint16_t), reinterpret_cast<uint16_t*>(indices), GL_DYNAMIC_DRAW);
+		}else{
+			glBufferData(GL_ARRAY_BUFFER, m_count * sizeof(uint32_t), reinterpret_cast<uint32_t*>(indices), GL_DYNAMIC_DRAW);
+		}
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+	}
 
 	IndexBuffer::~IndexBuffer() {
 		glDeleteBuffers(1, &m_indexBufferID);
@@ -52,6 +70,5 @@ namespace Gizmo {
 	void IndexBuffer::Unbind() const {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	};
-
 
 }

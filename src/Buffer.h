@@ -7,7 +7,7 @@
 #define assertm(exp, msg) assert((void(msg), exp))
 
 namespace Gizmo {
-	enum ShaderDataType { None = 0, Float, Float2, Float3, Int, Int2, Int3 };
+	enum ShaderDataType { None = 0, Float, Float2, Float3, Float4, Int, Int2, Int3 };
 
 	static uint32_t getShaderDataTypeSize(ShaderDataType type) {
 
@@ -15,6 +15,7 @@ namespace Gizmo {
 		case ShaderDataType::Float:		return 4;
 		case ShaderDataType::Float2:	return 8;
 		case ShaderDataType::Float3:	return 12;
+		case ShaderDataType::Float4:	return 16;
 		case ShaderDataType::Int:		return 4;
 		case ShaderDataType::Int2:		return 8;
 		case ShaderDataType::Int3:		return 12;
@@ -29,6 +30,7 @@ namespace Gizmo {
 		case ShaderDataType::Float:		return GL_FLOAT;
 		case ShaderDataType::Float2:	return GL_FLOAT;
 		case ShaderDataType::Float3:	return GL_FLOAT;
+		case ShaderDataType::Float4:	return GL_FLOAT;
 		case ShaderDataType::Int:		return GL_INT;
 		case ShaderDataType::Int2:		return GL_INT;
 		case ShaderDataType::Int3:		return GL_INT;
@@ -53,6 +55,7 @@ namespace Gizmo {
 			case ShaderDataType::Float:		return 1;
 			case ShaderDataType::Float2:	return 2;
 			case ShaderDataType::Float3:	return 3;
+			case ShaderDataType::Float4:	return 3;
 			case ShaderDataType::Int:		return 1;
 			case ShaderDataType::Int2:		return 2;
 			case ShaderDataType::Int3:		return 3;
@@ -86,7 +89,7 @@ namespace Gizmo {
 		void calculateOffsetAndStride() {
 			uint32_t offset = 0;
 			m_stride = 0;
-			for (BufferAttribute attrib : m_attributes) {
+			for (BufferAttribute& attrib : m_attributes) {
 				attrib.offset = offset;
 				m_stride += attrib.size;
 				offset += attrib.size;
@@ -94,7 +97,7 @@ namespace Gizmo {
 		};
 
 		std::vector<BufferAttribute> m_attributes;
-		uint32_t m_stride;
+		uint32_t m_stride = 0;
 	};
 
 	class VertexBuffer {
@@ -117,9 +120,13 @@ namespace Gizmo {
 		BufferLayout m_Layout;
 	};
 
+	enum class IndexType { UInt16, UInt32 }; 
+
 	class IndexBuffer {
 	public:
 		IndexBuffer(uint32_t* indices, uint32_t count);
+		IndexBuffer(uint16_t* indices, uint32_t count);
+		IndexBuffer(uint8_t* indices, uint32_t count, IndexType indexFormat); 
 		~IndexBuffer();
 
 		void Bind() const;
@@ -129,6 +136,8 @@ namespace Gizmo {
 	private:
 		uint32_t m_indexBufferID;
 		uint32_t m_count;
+
+		IndexType mIndexForamt; 
 	};
 
 }
