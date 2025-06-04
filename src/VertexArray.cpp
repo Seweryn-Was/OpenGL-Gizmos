@@ -29,7 +29,18 @@ namespace Gizmo{
 			switch (attrib.type)
 			{
 			case ShaderDataType::Float:
+				assertm(false, "Not implemented");
+				break;
 			case ShaderDataType::Float2:
+				glEnableVertexAttribArray(m_vertexBufferIndex);
+				glVertexAttribPointer(m_vertexBufferIndex,
+					attrib.getComponentCount(),
+					ShaderDataTypeToGLType(attrib.type),
+					attrib.normalized ? GL_TRUE : GL_FALSE,
+					layout.GetStride(),
+					(const void*)attrib.offset);
+				m_vertexBufferIndex++;
+				break;
 			case ShaderDataType::Float3: {
 				glEnableVertexAttribArray(m_vertexBufferIndex);
 				glVertexAttribPointer(m_vertexBufferIndex,
@@ -41,14 +52,29 @@ namespace Gizmo{
 				m_vertexBufferIndex++;
 				break;
 			}
+			case ShaderDataType::Float4: {
+				glEnableVertexAttribArray(m_vertexBufferIndex);
+				glVertexAttribPointer(m_vertexBufferIndex,
+					attrib.getComponentCount(),
+					ShaderDataTypeToGLType(attrib.type),
+					attrib.normalized ? GL_TRUE : GL_FALSE,
+					layout.GetStride(),
+					(const void*)attrib.offset);
+				m_vertexBufferIndex++;
+				break;
+			}
 			case ShaderDataType::Int:
+				assertm(false, "Not implemented");
+				break;
 			case ShaderDataType::Int2:
+				assertm(false, "Not implemented");
+				break;
 			case ShaderDataType::Int3:
+				assertm(false, "Not implemented");
+				break;
 			default:
 				assertm(false, "Unknown ShaderDataType!");
 			}
-
-
 		}
 
 		m_vertexBuffers.push_back(vertexBuffer);
