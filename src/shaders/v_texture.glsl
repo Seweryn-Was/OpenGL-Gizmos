@@ -19,8 +19,16 @@ void main() {
     // Skinning
     mat4 boneTransform = uBoneMatrices[int(aBoneID.x)];
 
+    vec4 skinnedPos = vec4(0.0);
+    for (int i = 0; i < 4; i++) {
+        if(aBoneWeight[i] == 0.0){ 
+            break; 
+        }
+        skinnedPos += aBoneWeight[i] * (uBoneMatrices[int(aBoneID[i])] * vec4(aPos, 1.0));
+    }
 
-    vec4 worldPos = M * boneTransform * vec4(aPos, 1.0);
+
+    vec4 worldPos = M * skinnedPos; //* boneTransform * vec4(aPos, 1.0);
     gl_Position = P * V * worldPos;
 
     // Light calculations

@@ -10,6 +10,8 @@ out vec4 FragColor;
 uniform sampler2D myTexture;
 
 void main() {
+    vec3 lightColor = vec3(1.0, 1.0, 1.0); 
+
     vec3 normal = normalize(n.xyz);
     vec3 lightDir = normalize(l.xyz);
     vec3 viewDir = normalize(v.xyz);
@@ -17,18 +19,18 @@ void main() {
 
     // Surface parameters
     vec3 kd = texture(myTexture, TexCoord).rgb;
-    vec3 ks = vec3(1.0, 0.0, 0.0); // White specular
+    vec3 ks = vec3(0.0, 0.0, 0.0); // White specular
     float shininess = 10.0;
 
     // Lighting
     float ambientStrength = 0.1;
-    vec3 ambient = ambientStrength * kd;
+    vec3 ambient = ambientStrength * lightColor * kd;
 
     float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = diff * kd;
+    vec3 diffuse = diff * lightColor * kd;
 
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-    vec3 specular = spec * ks;
+    vec3 specular = spec * lightColor * ks;
 
     vec3 result = ambient + diffuse + specular;
     FragColor = vec4(result, 1.0);
