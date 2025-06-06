@@ -39,8 +39,6 @@
 
 uint16_t gWindowWidth = 1200, gWindowHeight = 800;
 
-std::vector<Gizmo::Ref<Gizmo::StaticMesh>> gMeshes;
-
 glm::mat4 aiMatrix4x4ToGlm(const aiMatrix4x4& from) {
     glm::mat4 to(1.0f);
 
@@ -73,127 +71,89 @@ Transform DecomposeMatrix(const glm::mat4& mat) {
     trans.position = translation;
     trans.rotation = rotation;
     trans.scale = scale;
-    trans.scale = glm::vec3(1.0f);
+
     return trans;
 }
 
-struct NodeData {    
-    std::string name;
-    Transform localTrans; 
-    glm::mat4 invBindPose = glm::mat4(1.0f); 
-    int32_t parent = -1; 
-    std::vector<int32_t> children = {};
-};
+Gizmo::Ref<Gizmo::Skeleton> gSkeleton; 
+std::vector<Gizmo::Ref<Gizmo::SkinnedMesh>> gMeshes; 
 
-std::map<std::string, int> boneNameToIndex;
-std::vector<uint32_t> gpuIndexToCpuIndex(100);
-std::vector<NodeData> nodeHierarchy(50); 
-std::vector<glm::mat4> finalBoneMatrices(100, glm::mat4(1.0f));
-
-int boneCurrIndex = 0; 
-
-void BuildNodeHierarchy(int32_t parent, glm::mat4 parentGlobalTrans, const aiNode* node) {
+void BuildNodeHierarchy(int32_t parent, const aiNode* node){
 
     std::string nodeName(node->mName.C_Str());
 
-    int32_t index;
-    glm::mat4 globalTrans; 
+    glm::mat4 localTrans = aiMatrix4x4ToGlm(node->mTransformation);
 
-    if (boneNameToIndex.find(nodeName) == boneNameToIndex.end()) {
-        boneNameToIndex[nodeName] = boneCurrIndex;
-        index = boneCurrIndex; 
-
-        glm::mat4 localTrans = aiMatrix4x4ToGlm(node->mTransformation); 
-        nodeHierarchy[boneCurrIndex].name = nodeName;
-        nodeHierarchy[boneCurrIndex].parent = parent; 
-        nodeHierarchy[boneCurrIndex].localTrans = DecomposeMatrix(localTrans);
-        globalTrans = parentGlobalTrans * localTrans;
-        nodeHierarchy[boneCurrIndex].invBindPose = glm::inverse(globalTrans);
-
-        if (parent != -1) {
-            nodeHierarchy[parent].children.push_back(index);
-        }
-        boneCurrIndex++;
-    } else {
-        index = boneNameToIndex[nodeName]; 
-        globalTrans = glm::inverse(nodeHierarchy[index].invBindPose);
-    }
+    int nodeIndex = gSkeleton->addNode(nodeName, parent, localTrans); 
 
     for (int i = 0; i < node->mNumChildren; i++) {
-        BuildNodeHierarchy(boneNameToIndex[nodeName], globalTrans, node->mChildren[i]);
+        BuildNodeHierarchy(nodeIndex, node->mChildren[i]);
     }
 }
 
-uint32_t gpuBoneIndexCtr = 0; 
+void BuildHierarchy(const aiNode* node) {
+    gSkeleton = Gizmo::CreateRef<Gizmo::Skeleton>();
+    BuildNodeHierarchy(-1, node);
+}
 
-void ProcessMesh(aiMesh* mesh, const aiScene* scene) {
-
-    std::vector<float> meshVert;
-    std::vector<uint32_t> meshIndecies;
+void ProcessAiMesh(const aiMesh* mesh) {
+    std::vector<float> vertecies; 
+    std::vector<uint32_t> indecies; 
+    std::vector<Gizmo::Bone> bones; 
 
     const int stride = 16;
     const int boneIDOffset = 8, weightOffset = 12;
 
     for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
         glm::vec3 normal = mesh->HasNormals() ? glm::vec3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z) : glm::vec3(0.0f);
-        glm::vec2 texCoords = mesh->HasTextureCoords(0) ? glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) : glm::vec2(0.0f);       
+        glm::vec2 texCoords = mesh->HasTextureCoords(0) ? glm::vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y) : glm::vec2(0.0f);
 
-        meshVert.push_back(mesh->mVertices[i].x);
-        meshVert.push_back(mesh->mVertices[i].y);
-        meshVert.push_back(mesh->mVertices[i].z);
-        
-        meshVert.push_back(normal.x); 
-        meshVert.push_back(normal.y);
-        meshVert.push_back(normal.z); 
+        vertecies.resize(vertecies.size() + stride);
 
-        meshVert.push_back(texCoords.x);
-        meshVert.push_back(texCoords.y);
+        const int vertIndex = i * stride; 
+        vertecies[vertIndex + 0] = mesh->mVertices[i].x;
+        vertecies[vertIndex + 1] = mesh->mVertices[i].y;
+        vertecies[vertIndex + 2] = mesh->mVertices[i].z;
+
+        vertecies[vertIndex + 3] = normal.x;
+        vertecies[vertIndex + 4] = normal.y;
+        vertecies[vertIndex + 5] = normal.z;
+
+        vertecies[vertIndex + 6] = texCoords.x;
+        vertecies[vertIndex + 7] = texCoords.y;
 
         //Bone Id; 
-        meshVert.push_back(-1.0f);
-        meshVert.push_back(-1.0f);
-        meshVert.push_back(-1.0f);
-        meshVert.push_back(-1.0f);
+        vertecies[vertIndex + 8] = -1.0f;
+        vertecies[vertIndex + 9] = -1.0f;
+        vertecies[vertIndex + 10]= -1.0f;
+        vertecies[vertIndex + 11]= -1.0f;
 
         //weights
-        meshVert.push_back(0.0f);
-        meshVert.push_back(0.0f);
-        meshVert.push_back(0.0f);
-        meshVert.push_back(0.0f);
-        // Store to your vertex structure
+        vertecies[vertIndex + 12] = 0.0f;
+        vertecies[vertIndex + 13] = 0.0f;
+        vertecies[vertIndex + 14] = 0.0f;
+        vertecies[vertIndex + 15] = 0.0f;
     }
 
+    //settting Indecies
     for (unsigned int i = 0; i < mesh->mNumFaces; ++i) {
         aiFace face = mesh->mFaces[i];
-        //gModelIndices.push_back({});
         for (unsigned int j = 0; j < face.mNumIndices; ++j) {
-            meshIndecies.push_back(face.mIndices[j]);
+            indecies.push_back(face.mIndices[j]);
         }
     }
 
-    //skinning
+    //Skinning
     for (unsigned int i = 0; i < mesh->mNumBones; i++) {
         aiBone* aibone = mesh->mBones[i];
         std::string boneName(aibone->mName.C_Str());
 
-        int cpuBoneIndex;
-        if (boneNameToIndex.find(boneName) == boneNameToIndex.end()) {
-            assertm(false, "Somethings Wrong didnt find Bone in Node Hierarchy");
-        }
-        else {
-            cpuBoneIndex = boneNameToIndex[boneName];
-        }
+        uint32_t index = gSkeleton->getNodeIndex(boneName); 
 
-        uint32_t gpuBoneIndex = gpuBoneIndexCtr;
-        for (int j = 0; j < gpuBoneIndexCtr; j++) {
-            if (gpuIndexToCpuIndex[j] == cpuBoneIndex) {
-                gpuBoneIndex = j; 
-            }
-        }
+        uint32_t boneGPUIndex = bones.size(); 
 
-        gpuIndexToCpuIndex[gpuBoneIndexCtr] = cpuBoneIndex; 
+        bones.push_back(Gizmo::Bone(index, aiMatrix4x4ToGlm(aibone->mOffsetMatrix))); 
 
-        if(gpuBoneIndex == gpuBoneIndexCtr) gpuBoneIndexCtr++; 
 
         for (unsigned int j = 0; j < aibone->mNumWeights; ++j) {
             const int vertexID = aibone->mWeights[j].mVertexId;
@@ -205,9 +165,9 @@ void ProcessMesh(aiMesh* mesh, const aiScene* scene) {
                 const int boneSlot = base + boneIDOffset + k;
                 const int weightSlot = base + weightOffset + k;
 
-                if (meshVert[weightSlot] == 0.0f) {
-                    meshVert[boneSlot] = static_cast<float>(gpuBoneIndex);
-                    meshVert[weightSlot] = weight;
+                if (vertecies[weightSlot] == 0.0f) {
+                    vertecies[boneSlot] = static_cast<float>(boneGPUIndex);
+                    vertecies[weightSlot] = weight;
                     break;
                 }
             }
@@ -215,62 +175,25 @@ void ProcessMesh(aiMesh* mesh, const aiScene* scene) {
         }
     }
 
-    Gizmo::StaticMesh myMesh(meshVert, { Gizmo::SubMesh(meshIndecies, 0) }, Gizmo::BufferLayout({
-        Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float3, false),
-        Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float3, false),
-        Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float2, false),
-        Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float4, false),
-        Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float4, false)
-        }));
-    gMeshes.push_back(Gizmo::CreateRef<Gizmo::StaticMesh>(myMesh));
+    Gizmo::SkinnedMesh myMesh(vertecies, { Gizmo::SubMesh(indecies, 0) }, Gizmo::BufferLayout({
+       Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float3, false),
+       Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float3, false),
+       Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float2, false),
+       Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float4, false),
+       Gizmo::BufferAttribute(Gizmo::ShaderDataType::Float4, false)
+        }), bones);
 
+    gMeshes.push_back(Gizmo::CreateRef<Gizmo::SkinnedMesh>(myMesh));
 }
 
-Gizmo::Ref<Gizmo::StaticMesh> stormTrooperMesh;
-
-
-static void ProcessNode(aiNode* node, const aiScene* scene) {
+static void ProcessAiNode(aiNode* node, const aiScene* scene) {
 
     for (unsigned int i = 0; i < node->mNumMeshes; i++) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        ProcessMesh(mesh, scene);
+        ProcessAiMesh(mesh);
     }
     for (unsigned int i = 0; i < node->mNumChildren; i++) {
-        ProcessNode(node->mChildren[i], scene);
-    }
-}
-
-glm::mat4 CalculateGloablTrans(int index) {
-    if (nodeHierarchy[index].parent == -1) {
-        return nodeHierarchy[index].localTrans.GetTransMat(); 
-    }
-    return CalculateGloablTrans(nodeHierarchy[index].parent) * nodeHierarchy[index].localTrans.GetTransMat();
-}
-
-void CalculateGlobalTrans(std::vector<glm::mat4>& globalTrans) {
-    globalTrans.resize(gpuIndexToCpuIndex.size()); 
-    for (int i = 0; i < gpuIndexToCpuIndex.size(); i++) {
-        globalTrans[i] = CalculateGloablTrans(gpuIndexToCpuIndex[i]);
-        globalTrans[i] = globalTrans[i] * nodeHierarchy[gpuIndexToCpuIndex[i]].invBindPose;
-    }
-}
-
-std::vector<glm::vec3> boneLines;
-
-void CollectBoneLines() {
-    boneLines.clear();
-
-    for (int i = 0; i < boneCurrIndex; ++i) {
-        glm::mat4 globalTransform = CalculateGloablTrans(i);
-        glm::vec3 parentPos = glm::vec3(globalTransform[3]);  // translation column
-
-        for (int childIndex : nodeHierarchy[i].children) {
-            glm::mat4 childTransform = CalculateGloablTrans(childIndex);
-            glm::vec3 childPos = glm::vec3(childTransform[3]);
-
-            boneLines.push_back(parentPos);
-            boneLines.push_back(childPos);  // One line = two points
-        }
+        ProcessAiNode(node->mChildren[i], scene);
     }
 }
 
@@ -312,8 +235,8 @@ int main() {
     Input::Init(window); 
 
     Assimp::Importer importer;
-    assertm(false, "give path to a model file"); 
-    const aiScene* scene = importer.ReadFile("<path to model file>",
+    const aiScene* scene = importer.ReadFile("C:/Users/ACER/Desktop/Nowy folder/hero.fbx",
+        aiProcess_GlobalScale |
         aiProcess_Triangulate |
         aiProcess_JoinIdenticalVertices |
         aiProcess_GenSmoothNormals |
@@ -326,10 +249,8 @@ int main() {
         return 0;
     }
 
-    BuildNodeHierarchy(-1, glm::mat4(1.0f), scene->mRootNode); 
-    ProcessNode(scene->mRootNode, scene);
-
-    CalculateGlobalTrans(finalBoneMatrices); 
+    BuildHierarchy(scene->mRootNode); 
+    ProcessAiNode(scene->mRootNode, scene); 
 
     std::vector<float> verticesbox = {
         //front face
@@ -344,6 +265,7 @@ int main() {
         -0.02f,  0.02f, -0.02f,  0.0f, 1.0f,// 7
     };
 
+    //indices for the square
     std::vector<uint32_t> indicesbox = {
         0, 1, 2, 2, 3, 0,  // front face
         1, 5, 6, 6, 2, 1,  // right face
@@ -361,12 +283,11 @@ int main() {
     Gizmo::StaticMesh boxMesh(verticesbox, { Gizmo::SubMesh(indicesbox, 0) }, box_layout);
 
     ShaderProgram defaultShader("shaders/v_default.glsl", "shaders/f_default.glsl");
+    ShaderProgram gridShader("shaders/v_grid.glsl", "shaders/f_grid.glsl");
     ShaderProgram textureShader("shaders/v_texture.glsl", "shaders/f_texture.glsl");
 
     Texture2D wallTexture("assets/textures/wall.jpg", 0);
-
-    assertm(false, "give path to texture"); 
-    Texture2D stormTrooperTexture("<path to texture>", 0);
+    Texture2D stormTrooperTexture("C:/Users/ACER/Desktop/Nowy folder/textures/man_t256.png", 0);
 
     glm::vec3 cameraPos = glm::vec3(.0f, 0.0f, -4.0f), objPos = glm::vec3(0.5f, 0.0f, 0.0f);
 
@@ -382,6 +303,7 @@ int main() {
 
         glClearColor(35.0f/255.0f, 35.0f / 255.0f, 35.0f / 255.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glEnable(GL_DEPTH_TEST);
 
 #ifdef GIZMOS_DEBUG
         ImGui_ImplOpenGL3_NewFrame();
@@ -392,26 +314,26 @@ int main() {
         glm::mat4 view = glm::translate(glm::mat4(1.0f), cameraPos);
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), static_cast<float>(gWindowWidth) / static_cast<float>(gWindowHeight), 0.1f, 300.0f);
 
+        gSkeleton->calculateGlobalTransforms();
         glm::mat4 temp = glm::mat4(1.0f);
 
-        glm::mat4 boneGlobal = CalculateGloablTrans(gpuIndexToCpuIndex[index]);
-        glm::mat4 boneWorldMat = model * boneGlobal; 
-        glm::mat4 copy = boneGlobal; 
 
-        int parentIndex = nodeHierarchy[gpuIndexToCpuIndex[index]].parent; 
+        glm::mat4 boneGlobal = gSkeleton->getGlobalTransform(index); 
+        glm::mat4 boneWorldMat = model * boneGlobal;
+        glm::mat4 copy = boneGlobal;
 
         gizmo::manipulate(&view, &projection, &boneWorldMat, &temp);
 
-        glm::mat4 parentGlobalTrans = CalculateGloablTrans(parentIndex); 
+        int parentIndex = gSkeleton->getNode(index).mParentIndex;
         glm::mat4 boneglobalTrans = glm::inverse(model) * boneWorldMat;
-        glm::mat4 boneLocalTrans = glm::inverse(parentGlobalTrans) * boneglobalTrans; 
 
-        glm::quat rot; 
-        glm::decompose(boneLocalTrans, glm::vec3(), rot, glm::vec3(), glm::vec3(), glm::vec4());
+        
+        glm::mat4 parentBoneGlobal = parentIndex == -1 ? glm::mat4(1.0f) : gSkeleton->getGlobalTransform(parentIndex);
 
-        nodeHierarchy[gpuIndexToCpuIndex[index]].localTrans.rotation = rot; 
+        glm::mat4 boneNewLocalTrans = glm::inverse(parentBoneGlobal) * boneglobalTrans;
 
-        CalculateGlobalTrans(finalBoneMatrices);
+        gSkeleton->setNodeLocalTrans(index, boneNewLocalTrans); 
+        gSkeleton->calculateGlobalTransforms();
 
         //model 
         for (int i = 0; i < gMeshes.size(); i++) {
@@ -420,45 +342,38 @@ int main() {
             gMeshes[i]->bindSubMesh(0);
             stormTrooperTexture.Bind();
             glUniformMatrix4fv(textureShader.u("V"), 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(textureShader.u("P"), 1, GL_FALSE, glm::value_ptr(projection));
-            glUniform1i(textureShader.u("index"), index); 
+            glUniformMatrix4fv(textureShader.u("P"), 1, GL_FALSE, glm::value_ptr(projection)); 
             glUniform3f(textureShader.u("color"), (GLfloat)0.2, (GLfloat)0.6, (GLfloat)0.2);
 
             glUniform1i(textureShader.u("myTexture"), 0);
 
             glUniformMatrix4fv(textureShader.u("M"), 1, GL_FALSE, glm::value_ptr(model));
 
-            for (int i = 0; i < finalBoneMatrices.size(); ++i) {
-                std::string name = "uBoneMatrices[" + std::to_string(i) + "]";
-                glUniformMatrix4fv(textureShader.u(name.c_str()), 1, GL_FALSE, glm::value_ptr(finalBoneMatrices[i]));
+            std::vector<glm::mat4> boneMatrecies; 
+            boneMatrecies = gMeshes[i]->calculateSkinningMatrices(*gSkeleton); 
+
+            for (int j = 0; j < gMeshes[i]->getBoneCount(); ++j) {
+                std::string name = "uBoneMatrices[" + std::to_string(j) + "]";
+                glUniformMatrix4fv(textureShader.u(name.c_str()), 1, GL_FALSE, glm::value_ptr(boneMatrecies[j]));
             }
+
             glDrawElements(GL_TRIANGLES, gMeshes[i]->getSubMesh(0).getCount(), GL_UNSIGNED_INT, 0);
         }
 
         int pixelX = static_cast<int>(Input::GetMouseX());
         int pixelY = 600 - static_cast<int>(Input::GetMouseY());
 
-        //draw box
+        //draw box as Bones transforamtions
         defaultShader.use();
-        boxMesh.bindSubMesh(0); //box_vao.Bind();
+        boxMesh.bindSubMesh(0);
         glUniformMatrix4fv(defaultShader.u("V"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(defaultShader.u("P"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniform3f(defaultShader.u("color"), 149.0f/250.0f, 149.0f / 250.0f, 149.0f / 250.0f);
 
-        for (int i = 0; i < boneCurrIndex; i++) {
-            glm::mat4 boneGlobal = finalBoneMatrices[i] * glm::inverse(nodeHierarchy[gpuIndexToCpuIndex[i]].invBindPose);
+        for (int i = 0; i < gSkeleton->getNodeCount(); i++) {
+            glm::mat4 boneGlobal = gSkeleton->getGlobalTransform(i);
             glm::mat4 trans = model * boneGlobal;
-
-            glUniform3f(defaultShader.u("color"), 149.0f / 250.0f, 149.0f / 250.0f, 149.0f / 250.0f);
-            if (nodeHierarchy[gpuIndexToCpuIndex[index]].parent == gpuIndexToCpuIndex[i]) {
-                glUniform3f(defaultShader.u("color"), 0.0f, 1.0f, 0.0f);
-            }
-            if (gpuIndexToCpuIndex[i] == gpuIndexToCpuIndex[index]) {
-                glUniform3f(defaultShader.u("color"), 1.0f, 0.0f, 0.0f);
-            }
-            if (std::count(nodeHierarchy[gpuIndexToCpuIndex[index]].children.begin(), nodeHierarchy[gpuIndexToCpuIndex[index]].children.end(), gpuIndexToCpuIndex[i])) {
-                glUniform3f(defaultShader.u("color"), 0.0f, 0.0f, 1.0f);
-            }
+            trans = glm::scale(trans, glm::vec3(0.005, 0.005, 0.005)); 
 
             glUniformMatrix4fv(defaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(trans));
             glDrawElements(GL_TRIANGLES, boxMesh.getSubMesh(0).getCount(), GL_UNSIGNED_INT, nullptr);
@@ -469,14 +384,13 @@ int main() {
 #ifdef GIZMOS_DEBUG
         ImGui::Text("glfwGetTime() = %.3f", (float)glfwGetTime());  
         ImGui::Text("FPS: %d", (int)(1/((float)glfwGetTime() - deltaTime))); 
-        
-        std::string boneName; 
-        ImGui::InputInt("index", &index, 1); 
-        for (const auto& [key, value] : boneNameToIndex)
-            if (value == gpuIndexToCpuIndex[index])
-                 boneName = key;
 
-        ImGui::Text(boneName.c_str());
+        ImGui::InputInt("index", &index, 1); 
+        
+        if (index < 0) index = gSkeleton->getNodeCount() - 1;
+        if (index >= gSkeleton->getNodeCount()) index = 0;
+
+        ImGui::Text(gSkeleton->getNode(index).mName.c_str());
         ImGui::End();
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
