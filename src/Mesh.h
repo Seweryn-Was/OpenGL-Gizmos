@@ -1,3 +1,6 @@
+#include <string>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "Base.h"
 #include "VertexArray.h"
 #include "Buffer.h"
@@ -47,4 +50,105 @@ namespace Gizmo {
 		IndexType mIndexFormat;
 		uint32_t mVertCount;
 	};
+
+	struct Bone {
+		Bone(uint32_t nodeIndex, glm::mat4 invBindPose) : mNodeIndex(nodeIndex), mInvBindPose(invBindPose)  {}
+
+		uint32_t mNodeIndex;
+		glm::mat4 mInvBindPose; 
+	};
+
+	struct Node {
+		Node(std::string name, int32_t parentIndex, glm::mat4 localTransform) 
+			: mName(name), mParentIndex(parentIndex), mLocalTransform(localTransform), mGlobalTransform(glm::mat4(1.0f)) {}
+
+		std::string mName; 
+		int32_t mParentIndex; 
+		glm::mat4 mLocalTransform; 
+		glm::mat4 mGlobalTransform; //cache
+
+
+	};
+
+	class Skeleton {
+	public:
+		Skeleton() {
+			mNodes.clear(); 
+		}
+
+		int addNode(const std::string& name, const uint32_t& parentIndex, const glm::mat4& localTransform) {
+			uint32_t index = mNodes.size();
+			mNodeNameToIndex[name] = index;
+			mNodes.push_back(Node(name, parentIndex, localTransform));  
+			return index; 
+		}
+
+		int addNode(const Node& node) { 
+			uint32_t index = mNodes.size();
+			mNodeNameToIndex[node.mName] = index;
+			mNodes.push_back(node); 
+			return index; 
+		}
+
+		void setNodeLocalTrans(uint32_t index, glm::mat4 localTrans) {
+			mNodes[index].mLocalTransform = localTrans; 
+		}
+
+		uint32_t getNodeIndex(std::string name) { return mNodeNameToIndex[name]; }
+
+		Node getNode(int index) { return mNodes[index]; }
+
+		void calculateGlobalTransforms() {
+			calculateRecursive(0, glm::mat4(1.0f));
+		}
+
+		const glm::mat4& getGlobalTransform(int index) const {
+			return mNodes[index].mGlobalTransform;
+		}
+
+		int getNodeCount() {
+			return mNodes.size(); 
+		}
+
+	private:
+		std::vector<Node> mNodes;
+		std::unordered_map<std::string, uint32_t> mNodeNameToIndex; 
+
+		void calculateRecursive(int nodeIndex, const glm::mat4& parentTransform) {
+			Node& node = mNodes[nodeIndex];
+			node.mGlobalTransform = parentTransform * node.mLocalTransform;
+
+			for (int i = 0; i < mNodes.size(); ++i) {
+				if (mNodes[i].mParentIndex == nodeIndex)
+					calculateRecursive(i, node.mGlobalTransform);
+			}
+		}
+	};
+
+	class SkinnedMesh : public StaticMesh {
+	public: 
+		SkinnedMesh(const std::vector<float>& vertecies, 
+			const std::vector<SubMesh>& subMeshes, 
+			const BufferLayout& layout, 
+			const std::vector<Bone> bones) 
+			: StaticMesh(vertecies, subMeshes, layout), 
+			mBones(bones){}
+
+		std::vector<glm::mat4> calculateSkinningMatrices(const Skeleton& skeleton) const {
+			std::vector<glm::mat4> skinningMatrices;
+			for (size_t i = 0; i < mBones.size(); ++i) {
+				uint32_t nodeIndex = mBones[i].mNodeIndex;
+				glm::mat4 globalTransform = skeleton.getGlobalTransform(nodeIndex);
+				glm::mat4 skinMatrix = globalTransform * mBones[i].mInvBindPose;
+				skinningMatrices.push_back(skinMatrix);
+			}
+			return skinningMatrices;
+		}
+
+		int getBoneCount() { return mBones.size(); }
+
+	private: 
+		std::vector<Bone> mBones; // reference to scene node to get its local transform 
+	};
+
 }
