@@ -197,6 +197,52 @@ static void ProcessAiNode(aiNode* node, const aiScene* scene) {
     }
 }
 
+void processInput(GLFWwindow* window, glm::vec3 *cameraPos, glm::vec3 *cameraFront, glm::vec3 *cameraUp, float *pitch, float *yaw)
+{
+        const float cameraSpeed = 0.05f; // adjust accordingly
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        *cameraPos += cameraSpeed * *cameraFront * 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        *cameraPos -= cameraSpeed * *cameraFront * 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        *cameraPos -= glm::normalize(glm::cross(*cameraFront, *cameraUp)) * cameraSpeed * 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        *cameraPos += glm::normalize(glm::cross(*cameraFront, *cameraUp)) * cameraSpeed * 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
+        cameraPos->y += cameraSpeed*0.1f;
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS)
+        cameraPos->y -= cameraSpeed * 0.1f;
+    if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
+    {
+        *pitch += cameraSpeed;
+    }
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
+    {
+        *pitch -= cameraSpeed;
+        
+    }
+    if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS)
+    {
+        *yaw -= cameraSpeed;
+    }
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
+    {
+        *yaw += cameraSpeed;
+    }
+
+    glm::vec3 direction;
+    direction.x = cos(glm::radians(*yaw)) * cos(glm::radians(*pitch));
+    direction.y = sin(glm::radians(*pitch));
+    direction.z = sin(glm::radians(*yaw)) * cos(glm::radians(*pitch));
+    *cameraFront = glm::normalize(direction);
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    
+}
+
+
 int main() {
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW" << std::endl;
@@ -235,7 +281,7 @@ int main() {
     Input::Init(window); 
 
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile("C:/Users/ACER/Desktop/Nowy folder/hero.fbx",
+    const aiScene* scene = importer.ReadFile("C:/Users/tadeo/Documents/grafikaprojekt/hero.fbx",
         aiProcess_GlobalScale |
         aiProcess_Triangulate |
         aiProcess_JoinIdenticalVertices |
@@ -283,13 +329,17 @@ int main() {
     Gizmo::StaticMesh boxMesh(verticesbox, { Gizmo::SubMesh(indicesbox, 0) }, box_layout);
 
     ShaderProgram defaultShader("shaders/v_default.glsl", "shaders/f_default.glsl");
-    ShaderProgram gridShader("shaders/v_grid.glsl", "shaders/f_grid.glsl");
+    //ShaderProgram gridShader("shaders/v_grid.glsl", "shaders/f_grid.glsl");
     ShaderProgram textureShader("shaders/v_texture.glsl", "shaders/f_texture.glsl");
 
     Texture2D wallTexture("assets/textures/wall.jpg", 0);
-    Texture2D stormTrooperTexture("C:/Users/ACER/Desktop/Nowy folder/textures/man_t256.png", 0);
+    Texture2D stormTrooperTexture("C:/Users/tadeo/Documents/grafikaprojekt/man_t256.png", 0);
 
     glm::vec3 cameraPos = glm::vec3(.0f, 0.0f, -4.0f), objPos = glm::vec3(0.5f, 0.0f, 0.0f);
+    glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    float yaw = -90.0f, pitch = 0.0f;
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(glm::mat4(1.0f), objPos);
@@ -310,9 +360,18 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGui::Begin("Debug Window");
+        ImGui::SliderFloat("x", &cameraPos[0], -10.0f, 10.0f);
+        ImGui::SliderFloat("y", &cameraPos[1], -10.0f, 10.0f);
+        ImGui::SliderFloat("z", &cameraPos[2], -10.0f, 10.0f);
+
+        ImGui::SliderFloat3("cameraTarget", glm::value_ptr(cameraFront), -1.0f, 1.0f);
+        ImGui::SliderFloat3("up", glm::value_ptr(cameraUp), -1.0f, 1.0f);
+
+        processInput(window, &cameraPos, &cameraFront, &cameraUp, &pitch, &yaw);
+
 #endif // GIZMOS_DEBUG
-        glm::mat4 view = glm::translate(glm::mat4(1.0f), cameraPos);
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), static_cast<float>(gWindowWidth) / static_cast<float>(gWindowHeight), 0.1f, 300.0f);
+        glm::mat4 view = glm::lookAt(cameraPos, cameraPos+cameraFront, cameraUp);
+        glm::mat4 projection = glm::perspective(glm::radians(80.0f), static_cast<float>(gWindowWidth) / static_cast<float>(gWindowHeight), 0.1f, 300.0f);
 
         gSkeleton->calculateGlobalTransforms();
         glm::mat4 temp = glm::mat4(1.0f);
