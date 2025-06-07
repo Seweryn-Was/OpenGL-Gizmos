@@ -74,6 +74,7 @@ namespace Gizmo {
 	public:
 		Skeleton() {
 			mNodes.clear(); 
+			mBones.clear(); 
 		}
 
 		int addNode(const std::string& name, const uint32_t& parentIndex, const glm::mat4& localTransform) {
@@ -88,6 +89,14 @@ namespace Gizmo {
 			mNodeNameToIndex[node.mName] = index;
 			mNodes.push_back(node); 
 			return index; 
+		}
+
+		int addBone(const std::string& name, uint32_t nodeIndex, glm::mat4 invBindPose) {
+			if (mBoneNameToIndex.count(name) == 0) {
+				mBoneNameToIndex[name] = mBones.size(); 
+				mBones.push_back(Bone(nodeIndex, invBindPose)); 
+			}
+			return mBoneNameToIndex[name];
 		}
 
 		void setNodeLocalTrans(uint32_t index, glm::mat4 localTrans) {
@@ -110,9 +119,31 @@ namespace Gizmo {
 			return mNodes.size(); 
 		}
 
+		int getBoneCount() {
+			return mBones.size(); 
+		}
+
+		Bone getBone(uint32_t index) {
+			return mBones[index]; 
+		}
+
+		std::vector<glm::mat4> calculateSkinningMatrices() const { // first call calculateGlobalTransforms(); 
+			std::vector<glm::mat4> skinningMatrices;
+			for (size_t i = 0; i < mBones.size(); ++i) {
+				uint32_t nodeIndex = mBones[i].mNodeIndex;
+				glm::mat4 globalTransform = getGlobalTransform(nodeIndex);
+				glm::mat4 skinMatrix = globalTransform * mBones[i].mInvBindPose;
+				skinningMatrices.push_back(skinMatrix);
+			}
+			return skinningMatrices;
+		}
+
+		std::unordered_map<std::string, uint32_t> mBoneNameToIndex;
 	private:
 		std::vector<Node> mNodes;
+		std::vector<Bone> mBones; 
 		std::unordered_map<std::string, uint32_t> mNodeNameToIndex; 
+		
 
 		void calculateRecursive(int nodeIndex, const glm::mat4& parentTransform) {
 			Node& node = mNodes[nodeIndex];
@@ -127,28 +158,28 @@ namespace Gizmo {
 
 	class SkinnedMesh : public StaticMesh {
 	public: 
-		SkinnedMesh(const std::vector<float>& vertecies, 
-			const std::vector<SubMesh>& subMeshes, 
-			const BufferLayout& layout, 
-			const std::vector<Bone> bones) 
-			: StaticMesh(vertecies, subMeshes, layout), 
-			mBones(bones){}
+		SkinnedMesh(const std::vector<float>& vertecies,
+			const std::vector<SubMesh>& subMeshes,
+			const BufferLayout& layout,
+			const std::vector<Bone> bones)
+			: StaticMesh(vertecies, subMeshes, layout) {}
+			//mBones(bones){}
 
-		std::vector<glm::mat4> calculateSkinningMatrices(const Skeleton& skeleton) const {
-			std::vector<glm::mat4> skinningMatrices;
-			for (size_t i = 0; i < mBones.size(); ++i) {
-				uint32_t nodeIndex = mBones[i].mNodeIndex;
-				glm::mat4 globalTransform = skeleton.getGlobalTransform(nodeIndex);
-				glm::mat4 skinMatrix = globalTransform * mBones[i].mInvBindPose;
-				skinningMatrices.push_back(skinMatrix);
-			}
-			return skinningMatrices;
-		}
+		//std::vector<glm::mat4> calculateSkinningMatrices(const Skeleton& skeleton) const {
+		//	std::vector<glm::mat4> skinningMatrices;
+		//	for (size_t i = 0; i < mBones.size(); ++i) {
+		//		uint32_t nodeIndex = mBones[i].mNodeIndex;
+		//		glm::mat4 globalTransform = skeleton.getGlobalTransform(nodeIndex);
+		//		glm::mat4 skinMatrix = globalTransform * mBones[i].mInvBindPose;
+		//		skinningMatrices.push_back(skinMatrix);
+		//	}
+		//	return skinningMatrices;
+		//}
 
-		int getBoneCount() { return mBones.size(); }
+		//int getBoneCount() { return mBones.size(); }
 
 	private: 
-		std::vector<Bone> mBones; // reference to scene node to get its local transform 
+		//std::vector<Bone> mBones; // reference to scene node to get its local transform 
 	};
 
 }

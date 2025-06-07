@@ -8,9 +8,9 @@ in vec4 v;
 out vec4 FragColor;
 
 uniform sampler2D myTexture;
+uniform vec3 lightColor;
 
 void main() {
-    vec3 lightColor = vec3(1.0, 1.0, 1.0); 
 
     vec3 normal = normalize(n.xyz);
     vec3 lightDir = normalize(l.xyz);

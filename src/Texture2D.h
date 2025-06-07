@@ -17,6 +17,7 @@ public:
     inline int getWidth() const { return mWidth; }
     inline int getHeight() const { return mHeight; }
     inline GLuint getTexture() const { return mTextureID; }
+    inline uint32_t getSlot() const { return mSlotID; }
 
 private:
     GLuint loadTexture();

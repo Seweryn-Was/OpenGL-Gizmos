@@ -5,6 +5,8 @@ layout (location = 2) in vec2 aTexCoord;
 layout (location = 3) in vec4 aBoneID;
 layout (location = 4) in vec4 aBoneWeight;
 
+uniform vec3 lightPos;
+
 uniform mat4 M;
 uniform mat4 V;
 uniform mat4 P;
@@ -16,24 +18,30 @@ out vec4 n;
 out vec4 v;
 
 void main() {
-    // Skinning
-    mat4 boneTransform = uBoneMatrices[int(aBoneID.x)];
+    vec4 totalPosition = vec4(0.0f);
+    mat4 boneTransform = mat4(1.0);
 
-    vec4 skinnedPos = vec4(0.0);
-    for (int i = 0; i < 4; i++) {
-        if(aBoneWeight[i] == 0.0){ 
-            break; 
+    for(int i = 0 ; i < 3 ; i++)
+    {
+        if(int(aBoneID[i]) == -1) 
+            continue;
+        if(int(aBoneID[i]) >=100) 
+        {
+            totalPosition = vec4(aPos,1.0f);
+            break;
         }
-        skinnedPos += aBoneWeight[i] * (uBoneMatrices[int(aBoneID[i])] * vec4(aPos, 1.0));
+        vec4 localPosition = uBoneMatrices[int(aBoneID[i])] * vec4(aPos,1.0f);
+        totalPosition += localPosition * aBoneWeight[i];
+
+        boneTransform += aBoneWeight[i] * uBoneMatrices[int(aBoneID[i])]; 
     }
 
-
-    vec4 worldPos = M * skinnedPos; //* boneTransform * vec4(aPos, 1.0);
+    vec4 worldPos = M * totalPosition; 
     gl_Position = P * V * worldPos;
 
     // Light calculations
-    vec4 lightPos = vec4(0, 0, 0, 1); // World space light position
-    l = normalize(V * lightPos - V * worldPos); // Light vector in view space
+    
+    l = normalize(V * vec4(lightPos, 1.0) - V * worldPos); // Light vector in view space
     v = normalize(vec4(0, 0, 0, 1) - V * worldPos); // View vector in view space
 
     mat3 normalMatrix = transpose(inverse(mat3(V * M * mat4(mat3(boneTransform)))));

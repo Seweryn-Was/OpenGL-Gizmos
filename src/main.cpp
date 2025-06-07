@@ -77,6 +77,7 @@ Transform DecomposeMatrix(const glm::mat4& mat) {
 
 Gizmo::Ref<Gizmo::Skeleton> gSkeleton; 
 std::vector<Gizmo::Ref<Gizmo::SkinnedMesh>> gMeshes; 
+std::vector<std::string> gMeshesNames; 
 
 void BuildNodeHierarchy(int32_t parent, const aiNode* node){
 
@@ -95,6 +96,8 @@ void BuildHierarchy(const aiNode* node) {
     gSkeleton = Gizmo::CreateRef<Gizmo::Skeleton>();
     BuildNodeHierarchy(-1, node);
 }
+
+int boneCtr = 0; 
 
 void ProcessAiMesh(const aiMesh* mesh) {
     std::vector<float> vertecies; 
@@ -150,10 +153,7 @@ void ProcessAiMesh(const aiMesh* mesh) {
 
         uint32_t index = gSkeleton->getNodeIndex(boneName); 
 
-        uint32_t boneGPUIndex = bones.size(); 
-
-        bones.push_back(Gizmo::Bone(index, aiMatrix4x4ToGlm(aibone->mOffsetMatrix))); 
-
+        uint32_t boneIndex = gSkeleton->addBone(boneName, index, aiMatrix4x4ToGlm(aibone->mOffsetMatrix)); 
 
         for (unsigned int j = 0; j < aibone->mNumWeights; ++j) {
             const int vertexID = aibone->mWeights[j].mVertexId;
@@ -166,10 +166,11 @@ void ProcessAiMesh(const aiMesh* mesh) {
                 const int weightSlot = base + weightOffset + k;
 
                 if (vertecies[weightSlot] == 0.0f) {
-                    vertecies[boneSlot] = static_cast<float>(boneGPUIndex);
+                    vertecies[boneSlot] = static_cast<float>(boneIndex);
                     vertecies[weightSlot] = weight;
                     break;
                 }
+
             }
 
         }
@@ -190,6 +191,7 @@ static void ProcessAiNode(aiNode* node, const aiScene* scene) {
 
     for (unsigned int i = 0; i < node->mNumMeshes; i++) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+        gMeshesNames.push_back(std::string(node->mName.C_Str())); 
         ProcessAiMesh(mesh);
     }
     for (unsigned int i = 0; i < node->mNumChildren; i++) {
@@ -235,7 +237,7 @@ int main() {
     Input::Init(window); 
 
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile("C:/Users/ACER/Desktop/Nowy folder/hero.fbx",
+    const aiScene* scene = importer.ReadFile("C:/Users/ACER/Desktop/stormtrooper/source/StormTrooper.fbx", //C:/Users/ACER/Desktop/Nowy folder/hero.fbx "C:/Users/ACER/Desktop/stormtrooper/source/StormTrooper.fbx"
         aiProcess_GlobalScale |
         aiProcess_Triangulate |
         aiProcess_JoinIdenticalVertices |
@@ -287,9 +289,17 @@ int main() {
     ShaderProgram textureShader("shaders/v_texture.glsl", "shaders/f_texture.glsl");
 
     Texture2D wallTexture("assets/textures/wall.jpg", 0);
-    Texture2D stormTrooperTexture("C:/Users/ACER/Desktop/Nowy folder/textures/man_t256.png", 0);
+    Texture2D stormTrooperBodyTexture( "C:/Users/ACER/Desktop/stormtrooper/textures/diffuse_body.png", 0);
+    Texture2D stormTrooperHandTexture( "C:/Users/ACER/Desktop/stormtrooper/textures/diffuse_hands.png", 0);
+    Texture2D stormTrooperHelmetTexture( "C:/Users/ACER/Desktop/stormtrooper/textures/diffuse_helmets.png", 0);
+
+    std::unordered_map < std::string, Texture2D*> texturesMap; 
+    texturesMap["body"] = &stormTrooperBodyTexture; 
+    texturesMap["hand"] = &stormTrooperHandTexture;
+    texturesMap["helmet"] = &stormTrooperHelmetTexture;
 
     glm::vec3 cameraPos = glm::vec3(.0f, 0.0f, -4.0f), objPos = glm::vec3(0.5f, 0.0f, 0.0f);
+    glm::vec3 lightPos = glm::vec3(0.5f, 1.0f, 1.0f), lighColor = glm::vec3(1.0, 0.0, 0.0);
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(glm::mat4(1.0f), objPos);
@@ -340,21 +350,24 @@ int main() {
 
             textureShader.use();
             gMeshes[i]->bindSubMesh(0);
-            stormTrooperTexture.Bind();
+
+            if(texturesMap[gMeshesNames[i]] != nullptr)
+                texturesMap[gMeshesNames[i]]->Bind(); 
+
             glUniformMatrix4fv(textureShader.u("V"), 1, GL_FALSE, glm::value_ptr(view));
             glUniformMatrix4fv(textureShader.u("P"), 1, GL_FALSE, glm::value_ptr(projection)); 
             glUniform3f(textureShader.u("color"), (GLfloat)0.2, (GLfloat)0.6, (GLfloat)0.2);
 
-            glUniform1i(textureShader.u("myTexture"), 0);
+            glUniform1i(textureShader.u("myTexture"), texturesMap[gMeshesNames[i]] != nullptr ? texturesMap[gMeshesNames[i]]->getSlot() : 0);
+
+            glUniform3f(textureShader.u("lightColor"), lighColor.x, lighColor.y, lighColor.z);
+            glUniform3f(textureShader.u("lightPos"), lightPos.x, lightPos.y, lightPos.z);
 
             glUniformMatrix4fv(textureShader.u("M"), 1, GL_FALSE, glm::value_ptr(model));
 
-            std::vector<glm::mat4> boneMatrecies; 
-            boneMatrecies = gMeshes[i]->calculateSkinningMatrices(*gSkeleton); 
-
-            for (int j = 0; j < gMeshes[i]->getBoneCount(); ++j) {
+            for (int j = 0; j < gSkeleton->getBoneCount() ; ++j) {
                 std::string name = "uBoneMatrices[" + std::to_string(j) + "]";
-                glUniformMatrix4fv(textureShader.u(name.c_str()), 1, GL_FALSE, glm::value_ptr(boneMatrecies[j]));
+                glUniformMatrix4fv(textureShader.u(name.c_str()), 1, GL_FALSE, glm::value_ptr(gSkeleton->getGlobalTransform(gSkeleton->getBone(j).mNodeIndex)* gSkeleton->getBone(j).mInvBindPose));
             }
 
             glDrawElements(GL_TRIANGLES, gMeshes[i]->getSubMesh(0).getCount(), GL_UNSIGNED_INT, 0);
@@ -364,20 +377,28 @@ int main() {
         int pixelY = 600 - static_cast<int>(Input::GetMouseY());
 
         //draw box as Bones transforamtions
+        glDisable(GL_DEPTH_TEST); 
         defaultShader.use();
         boxMesh.bindSubMesh(0);
         glUniformMatrix4fv(defaultShader.u("V"), 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(defaultShader.u("P"), 1, GL_FALSE, glm::value_ptr(projection));
         glUniform3f(defaultShader.u("color"), 149.0f/250.0f, 149.0f / 250.0f, 149.0f / 250.0f);
 
-        for (int i = 0; i < gSkeleton->getNodeCount(); i++) {
+        for (int i = 4; i < gSkeleton->getNodeCount(); i++) {
             glm::mat4 boneGlobal = gSkeleton->getGlobalTransform(i);
             glm::mat4 trans = model * boneGlobal;
-            trans = glm::scale(trans, glm::vec3(0.005, 0.005, 0.005)); 
+            trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5)); 
 
             glUniformMatrix4fv(defaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(trans));
             glDrawElements(GL_TRIANGLES, boxMesh.getSubMesh(0).getCount(), GL_UNSIGNED_INT, nullptr);
         }
+
+        //drawing light source cube
+        glEnable(GL_DEPTH_TEST); 
+        glUniform3f(defaultShader.u("color"), lighColor.x, lighColor.y, lighColor.z);
+        glm::mat4 lightModel = glm::translate(glm::mat4(1.0f), lightPos); 
+        glUniformMatrix4fv(defaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(lightModel));
+        glDrawElements(GL_TRIANGLES, boxMesh.getSubMesh(0).getCount(), GL_UNSIGNED_INT, nullptr);
 
         gizmo::drawRotationGizmo();
 
@@ -391,6 +412,10 @@ int main() {
         if (index >= gSkeleton->getNodeCount()) index = 0;
 
         ImGui::Text(gSkeleton->getNode(index).mName.c_str());
+
+        ImGui::InputFloat3("light Position", glm::value_ptr(lightPos)); 
+        ImGui::InputFloat3("light Color", glm::value_ptr(lighColor)); 
+
         ImGui::End();
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
