@@ -6,6 +6,7 @@ layout (location = 3) in vec4 aBoneID;
 layout (location = 4) in vec4 aBoneWeight;
 
 uniform vec3 lightPos;
+uniform vec3 lightPos2;
 
 uniform mat4 M;
 uniform mat4 V;
@@ -14,6 +15,7 @@ uniform mat4 uBoneMatrices[100];
 
 out vec2 TexCoord;
 out vec4 l;
+out vec4 l2;
 out vec4 n;
 out vec4 v;
 
@@ -42,6 +44,8 @@ void main() {
     // Light calculations
     
     l = normalize(V * vec4(lightPos, 1.0) - V * worldPos); // Light vector in view space
+    l2 = normalize(V * vec4(lightPos2, 1.0) - V * worldPos); // Light vector in view space
+
     v = normalize(vec4(0, 0, 0, 1) - V * worldPos); // View vector in view space
 
     mat3 normalMatrix = transpose(inverse(mat3(V * M * mat4(mat3(boneTransform)))));

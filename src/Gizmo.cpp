@@ -373,7 +373,7 @@ namespace gizmo {
 			rotationAxisLocalSpace = glm::normalize(rotationAxisLocalSpace);
 
 			float deltaAngle = gContext.rotationAngle - gContext.rotationAngleOrigin;
-			std::cout << deltaAngle << "\n"; 
+			
 			glm::mat4 deltamat = glm::rotate(gContext.model, deltaAngle, glm::vec3(rotationAxisLocalSpace));
 
 			glm::mat4 result = deltamat; 
@@ -447,17 +447,19 @@ namespace gizmo {
 		glUniformMatrix4fv(gDefaultShader.u("V"), 1, GL_FALSE, glm::value_ptr(gContext.viewMat));
 		glUniformMatrix4fv(gDefaultShader.u("P"), 1, GL_FALSE, glm::value_ptr(gContext.projectionMat));
 
-		const glm::mat4 viewModel = gContext.viewMat * gContext.model;
-		const glm::vec3 viewDir = glm::vec3(viewModel[3]);
+		glm::vec3 objectPos = glm::vec3(gContext.model[3]);
+		glm::vec3 cameraPos = glm::vec3(glm::inverse(gContext.viewMat)[3]);
 
-		const glm::vec3 defaultNormal = glm::vec3(0, 0, 1);
-		const glm::quat rot = glm::rotation(defaultNormal, viewDir);
-		const glm::mat4 rotationMatrix = glm::toMat4(rot);
+		glm::vec3 viewDir = glm::normalize(cameraPos - objectPos);
 
-		const glm::vec4 objPos = gContext.model[3];
+		glm::vec3 defaultNormal = glm::vec3(0, 0, 1);
+		glm::quat rot = glm::rotation(defaultNormal, viewDir);
+		glm::mat4 rotationMatrix = glm::toMat4(rot);
+		glm::mat4 billboardModel = glm::translate(glm::mat4(1.0f), objectPos) * rotationMatrix;
 
-		glUniform3f(gDefaultShader.u("color"), 0.5, 0.5, 0.5);
-		glUniformMatrix4fv(gDefaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(glm::translate(glm::mat4(1.0f), glm::vec3(objPos)) * rotationMatrix));
+		glUniformMatrix4fv(gDefaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(billboardModel));
+
+		glUniform3f(gDefaultShader.u("color"), 0.5f, 0.5f, 0.5f);
 		glLineWidth(3.0f);
 		glDrawArrays(GL_LINE_LOOP, 0, numSegments);
 

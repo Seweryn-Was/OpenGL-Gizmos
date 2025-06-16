@@ -216,20 +216,20 @@ void processInput(GLFWwindow* window, glm::vec3 *cameraPos, glm::vec3 *cameraFro
         cameraPos->y -= cameraSpeed * 0.1f;
     if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
     {
-        *pitch += cameraSpeed;
+        *pitch += cameraSpeed * 2;
     }
     if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
     {
-        *pitch -= cameraSpeed;
+        *pitch -= cameraSpeed * 2;
         
     }
     if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS)
     {
-        *yaw -= cameraSpeed;
+        *yaw -= cameraSpeed * 2;
     }
     if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
     {
-        *yaw += cameraSpeed;
+        *yaw += cameraSpeed * 2;
     }
 
     glm::vec3 direction;
@@ -277,7 +277,7 @@ int main() {
     Input::Init(window); 
 
     Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile("C:/Users/ACER/Desktop/stormtrooper/source/StormTrooper.fbx", //C:/Users/ACER/Desktop/Nowy folder/hero.fbx "C:/Users/ACER/Desktop/stormtrooper/source/StormTrooper.fbx"
+    const aiScene* scene = importer.ReadFile("assets/model/StormTrooper.fbx", //C:/Users/ACER/Desktop/Nowy folder/hero.fbx "C:/Users/ACER/Desktop/stormtrooper/source/StormTrooper.fbx"
         aiProcess_GlobalScale |
         aiProcess_Triangulate |
         aiProcess_JoinIdenticalVertices |
@@ -329,19 +329,20 @@ int main() {
     ShaderProgram textureShader("shaders/v_texture.glsl", "shaders/f_texture.glsl");
 
     Texture2D wallTexture("assets/textures/wall.jpg", 0);
-    Texture2D stormTrooperBodyTexture( "C:/Users/ACER/Desktop/stormtrooper/textures/diffuse_body.png", 0);
-    Texture2D stormTrooperHandTexture( "C:/Users/ACER/Desktop/stormtrooper/textures/diffuse_hands.png", 0);
-    Texture2D stormTrooperHelmetTexture( "C:/Users/ACER/Desktop/stormtrooper/textures/diffuse_helmets.png", 0);
+    Texture2D stormTrooperBodyTexture( "assets/textures/diffuse_body.png", 0);
+    Texture2D stormTrooperHandTexture( "assets/textures/diffuse_hands.png", 0);
+    Texture2D stormTrooperHelmetTexture( "assets/textures/diffuse_helmets.png", 0);
 
     std::unordered_map < std::string, Texture2D*> texturesMap; 
     texturesMap["body"] = &stormTrooperBodyTexture; 
     texturesMap["hand"] = &stormTrooperHandTexture;
     texturesMap["helmet"] = &stormTrooperHelmetTexture;
 
-    glm::vec3 cameraPos = glm::vec3(.0f, 0.0f, -4.0f), objPos = glm::vec3(0.5f, 0.0f, 0.0f);
+    glm::vec3 cameraPos = glm::vec3(-1.0f, 1.0f, 1.0f), objPos = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 lightPos = glm::vec3(0.5f, 1.0f, 1.0f), lighColor = glm::vec3(1.0, 0.0, 0.0);
+    glm::vec3 lightPos2 = glm::vec3(-1.0f, -0.5f, 0.0f), lighColor2 = glm::vec3(0.0, 1.0, 0.0);
 
-    glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, 0.0f);
+    glm::vec3 cameraFront = glm::vec3(0.75f, 0.0f, -0.75f); 
     glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
     float yaw = -90.0f, pitch = 0.0f;
@@ -365,12 +366,12 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
         ImGui::Begin("Debug Window");
-        ImGui::SliderFloat("x", &cameraPos[0], -10.0f, 10.0f);
+       /* ImGui::SliderFloat("x", &cameraPos[0], -10.0f, 10.0f);
         ImGui::SliderFloat("y", &cameraPos[1], -10.0f, 10.0f);
         ImGui::SliderFloat("z", &cameraPos[2], -10.0f, 10.0f);
 
         ImGui::SliderFloat3("cameraTarget", glm::value_ptr(cameraFront), -1.0f, 1.0f);
-        ImGui::SliderFloat3("up", glm::value_ptr(cameraUp), -1.0f, 1.0f);
+        ImGui::SliderFloat3("up", glm::value_ptr(cameraUp), -1.0f, 1.0f);*/
 #endif // GIZMOS_DEBUG
 
         processInput(window, &cameraPos, &cameraFront, &cameraUp, &pitch, &yaw);
@@ -416,6 +417,10 @@ int main() {
             glUniform3f(textureShader.u("lightColor"), lighColor.x, lighColor.y, lighColor.z);
             glUniform3f(textureShader.u("lightPos"), lightPos.x, lightPos.y, lightPos.z);
 
+
+            glUniform3f(textureShader.u("lightColor2"), lighColor2.x, lighColor2.y, lighColor2.z);
+            glUniform3f(textureShader.u("lightPos2"), lightPos2.x, lightPos2.y, lightPos2.z);
+
             glUniformMatrix4fv(textureShader.u("M"), 1, GL_FALSE, glm::value_ptr(model));
 
             for (int j = 0; j < gSkeleton->getBoneCount() ; ++j) {
@@ -442,14 +447,27 @@ int main() {
             glm::mat4 trans = model * boneGlobal;
             trans = glm::scale(trans, glm::vec3(0.5, 0.5, 0.5)); 
 
+            if (index == i) {
+                glUniform3f(defaultShader.u("color"), 1.0, 0.0f, 0.0f);
+            } else{
+                glUniform3f(defaultShader.u("color"), 149.0f / 250.0f, 149.0f / 250.0f, 149.0f / 250.0f);
+            }
+
             glUniformMatrix4fv(defaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(trans));
             glDrawElements(GL_TRIANGLES, boxMesh.getSubMesh(0).getCount(), GL_UNSIGNED_INT, nullptr);
         }
 
-        //drawing light source cube
+        //drawing light sources cube
+        //light 1
         glEnable(GL_DEPTH_TEST); 
         glUniform3f(defaultShader.u("color"), lighColor.x, lighColor.y, lighColor.z);
         glm::mat4 lightModel = glm::translate(glm::mat4(1.0f), lightPos); 
+        glUniformMatrix4fv(defaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(lightModel));
+        glDrawElements(GL_TRIANGLES, boxMesh.getSubMesh(0).getCount(), GL_UNSIGNED_INT, nullptr); 
+        
+        //light 2
+        glUniform3f(defaultShader.u("color"), lighColor2.x, lighColor2.y, lighColor2.z);
+        lightModel = glm::translate(glm::mat4(1.0f), lightPos2); 
         glUniformMatrix4fv(defaultShader.u("M"), 1, GL_FALSE, glm::value_ptr(lightModel));
         glDrawElements(GL_TRIANGLES, boxMesh.getSubMesh(0).getCount(), GL_UNSIGNED_INT, nullptr);
 
@@ -468,6 +486,9 @@ int main() {
 
         ImGui::InputFloat3("light Position", glm::value_ptr(lightPos)); 
         ImGui::InputFloat3("light Color", glm::value_ptr(lighColor)); 
+
+        ImGui::InputFloat3("light Position2", glm::value_ptr(lightPos2)); 
+        ImGui::InputFloat3("light Color2", glm::value_ptr(lighColor2)); 
 
         ImGui::End();
         ImGui::Render();

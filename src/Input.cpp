@@ -20,8 +20,6 @@ bool Input::IsKeyReleased(int32_t key)
 	return state == GLFW_RELEASE;
 }
 
-
-
 bool Input::IsMouseButtonPressed(int32_t button)
 {
 	auto* window = static_cast<GLFWwindow*>(sWindow);
